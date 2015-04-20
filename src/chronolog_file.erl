@@ -25,20 +25,23 @@
   ,stream/3
   ,encode/2
   ,decode/2
+  ,mktag/3
+  ,untag/3
+  ,match/2
 ]).
 
 %%
 %% build ticker association with internal 64-bit identifier
 ticker(#chronolog{fd=FD}, <<"urn:", _/binary>>=Urn) ->
-   case dive:get(FD, <<$t, Urn/binary>>) of
+   case dive:get(FD, <<$u, Urn/binary>>) of
       {error, not_found} ->
          {uid, Uid} = uid:l(),
          %% definition of urn have to be serialized due concurrency 
          dive:apply(FD, 
             fun() -> 
-               case dive:get(FD, <<$t, Urn/binary>>) of
+               case dive:get(FD, <<$u, Urn/binary>>) of
                   {error, not_found} ->
-                     ok  = dive:put_(FD, <<$t, Urn/binary>>, Uid),
+                     ok  = dive:put_(FD, <<$u, Urn/binary>>, Uid),
                      {ok, {uid, Uid}};                     
                   {ok, Val} ->
                      {ok, {uid, Val}}
@@ -87,6 +90,7 @@ encode_key(#chronolog{chronon={0,0,1}}, {A, B, C}) ->
 
 encode_val(_, X)
  when is_integer(X) ->
+   %% @todo: var int as valu
    <<$i, X:32>>;
 encode_val(_, X)
  when is_float(X) ->
@@ -109,5 +113,25 @@ decode_val(_, <<$f, X:64/float>>) ->
 decode_val(_, <<$u, X/binary>>) ->
    {uid, X}.
 
+%%
+%%
+mktag(#chronolog{fd=FD}, {uid, Uid}, Tag) ->
+   dive:put_(FD, <<$t, Tag/binary, $0, Uid/binary>>, <<>>).   
+
+%%
+%%
+untag(#chronolog{fd=FD}, {uid, Uid}, Tag) ->
+   dive:remove_(FD, <<$t, Tag/binary, $0, Uid/binary>>).   
+
+%%
+%%
+match(#chronolog{fd=FD}, Tag) ->
+   stream:map(
+      fun({Key, _}) -> 
+         [_,   Uid] = binary:split(Key, <<$0>>),
+         {uid, Uid}
+      end,
+      dive:match(FD, {'~', <<$t, Tag/binary>>})
+   ).
 
 

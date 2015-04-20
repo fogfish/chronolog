@@ -21,6 +21,10 @@
    new/1
   ,append/3
   ,stream/3
+  ,mktag/3
+  ,untag/3
+  ,match/2
+   %% @todo aika api
 ]).
 
 %%
@@ -28,6 +32,7 @@
 -type(fd()     :: any()).
 -type(ticker() :: binary()).
 -type(val()    :: integer() | uid:g()).
+-type(tag()    :: binary()).
 -type(series() :: [{tempus:t(), val()} | val()]).
 -type(range()  :: {tempus:t(), tempus:t()} | integer()).
 
@@ -63,7 +68,8 @@ append(FD, Ticker, Series) ->
          chronolog_file:append(FD, Uid, chronolog_file:encode(FD, X)) 
       end, 
       Series
-   ).
+   ),
+   {ok, Uid}.
 
 %%
 %% read stream values
@@ -76,5 +82,30 @@ stream(FD, Ticker, {_, _}=Range) ->
 stream(FD, Ticker, Sec) ->
    T = os:timestamp(),
    stream(FD, Ticker, {tempus:sub(T, Sec), T}).
-      
+
+
+%%
+%% create ticker tags
+-spec(mktag/3   :: (fd(), ticker(), tag()) -> ok).
+
+mktag(FD, Ticker, Tag) ->
+   {ok, Uid} = chronolog_file:ticker(FD, Ticker),
+   chronolog_file:mktag(FD, Uid, Tag).
+
+%%
+%% remove ticker tags
+-spec(untag/3   :: (fd(), ticker(), tag()) -> ok).
+
+untag(FD, Ticker, Tag) ->
+   {ok, Uid} = chronolog_file:ticker(FD, Ticker),
+   chronolog_file:untag(FD, Uid, Tag).
+
+%%
+%% match all ticker to tag
+-spec(match/2 :: (fd(), tag()) -> datum:stream()).
+
+match(FD, Tag) ->
+   chronolog_file:match(FD, Tag).
+
+
 
