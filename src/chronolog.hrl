@@ -15,8 +15,15 @@
 %%   limitations under the License.
 %%
 
-
+%%
+%%
 -record(chronolog, {
    fd      = undefined :: any(),
    chronon = undefined :: tempus:t() | integer()
 }).
+
+%%
+%%
+-ifndef(NULL).
+-define(NULL, {}).
+-endif.
