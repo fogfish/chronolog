@@ -1,0 +1,16 @@
+*.*~
+*.log
+*.aux
+*.beam
+*.dump
+*.tag.gz
+*.tgz
+src/*_leex.erl
+src/*_yeec.erl
+ebin/
+deps/
+.eunit/
+tests/
+rebar
+.rebar/
+*.sublime-*
