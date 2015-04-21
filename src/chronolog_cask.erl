@@ -58,7 +58,7 @@ init([_ | Opts], State) ->
    init(Opts, State);
 init([], #srv{chronon=C, opts=Opts}=State) ->
    {ok, FD} = dive:new(Opts),
-   State#srv{fd = #chronolog{fd=FD, chronon=C}}.
+   State#srv{fd = #chronolog{pid = self(), fd=FD, chronon=C}}.
    
 terminate(_Reason, #srv{fd = #chronolog{fd = FD}}) ->
    dive:free(FD).

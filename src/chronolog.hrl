@@ -18,6 +18,7 @@
 %%
 %%
 -record(chronolog, {
+   pid     = undefined :: pid(),
    fd      = undefined :: any(),
    chronon = undefined :: tempus:t() | integer()
 }).

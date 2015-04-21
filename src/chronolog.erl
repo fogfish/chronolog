@@ -20,6 +20,7 @@
 -export([start/0]).
 -export([
    new/1
+  ,free/1
   ,append/3
   ,stream/3
   ,mktag/3
@@ -62,6 +63,13 @@ new(Opts) ->
       Error     ->
          Error
    end.
+
+%%
+%% release resources used by time-series
+-spec(free/1 :: (any()) -> ok).
+
+free(#chronolog{pid = Pid}) ->
+   gen_server:call(Pid, free).
 
 %%
 %% append value
