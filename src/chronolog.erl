@@ -34,6 +34,7 @@
   ,intersect/3
   ,scan/3
 ]).
+-export_type([ticker/0, series/0]).
 
 %%
 %% type definition

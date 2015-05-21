@@ -90,7 +90,7 @@ encode_key(#chronolog{chronon={0,0,1}}, {A, B, C}) ->
 
 encode_val(_, X)
  when is_integer(X) ->
-   %% @todo: var int as valu
+   %% @todo: var int as value (?)
    <<$i, X:32>>;
 encode_val(_, X)
  when is_float(X) ->
