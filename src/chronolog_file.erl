@@ -20,7 +20,8 @@
 -include("chronolog.hrl").
 
 -export([
-   ticker/2
+   lookup/2
+  ,ticker/2
   ,append/3
   ,stream/3
   ,encode/2
@@ -29,6 +30,12 @@
   ,untag/3
   ,match/2
 ]).
+
+%%
+%% lookup ticker associated with internal 64-bit identifier
+lookup(#chronolog{fd=FD}, {uid, Uid}) ->
+   {ok, Urn} = dive:get(FD, <<$i, Uid/binary>>),
+   Urn.
 
 %%
 %% build ticker association with internal 64-bit identifier
@@ -42,6 +49,7 @@ ticker(#chronolog{fd=FD}, <<"urn:", _/binary>>=Urn) ->
                case dive:get(FD, <<$u, Urn/binary>>) of
                   {error, not_found} ->
                      ok  = dive:put_(FD, <<$u, Urn/binary>>, Uid),
+                     ok  = dive:put_(FD, <<$i, Uid/binary>>, Urn),
                      {ok, {uid, Uid}};                     
                   {ok, Val} ->
                      {ok, {uid, Val}}

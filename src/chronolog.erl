@@ -21,6 +21,7 @@
 -export([
    new/1
   ,free/1
+  ,ticker/2
   ,append/3
   ,stream/3
   ,mktag/3
@@ -71,6 +72,13 @@ new(Opts) ->
 
 free(#chronolog{pid = Pid}) ->
    gen_server:call(Pid, free).
+
+%%
+%% lookup human readable urn by 64-bit uid
+-spec(ticker/2 :: (fd(), uid:l()) -> ticker()).
+
+ticker(FD, Uid) ->
+   chronolog_file:lookup(FD, Uid).
 
 %%
 %% append value
