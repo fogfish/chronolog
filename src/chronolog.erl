@@ -34,6 +34,7 @@
   ,intersect/1
   ,intersect/3
   ,scan/3
+  ,csv/1
 ]).
 -export_type([ticker/0, series/0, range/0]).
 
@@ -124,6 +125,7 @@ untag(FD, Ticker, Tag) ->
 
 %%
 %% match all ticker to tag
+%% @todo: match all tags for ticker
 -spec(match/2 :: (fd(), tag()) -> datum:stream()).
 
 match(FD, Tag) ->
@@ -277,4 +279,36 @@ scan(Fun, {_, _, _}=W, Stream) ->
    ),
    stream:new({Chronon, Fun([X || {_, X} <- Head])}, fun() -> scan(Fun, W, Tail) end).
 
+%%
+%% time series read from csv file and fold it using urn as key
+-spec(csv/1 :: (datum:stream()) -> datum:stream()).
+
+csv(Stream) ->
+   fold(stream:filter(fun assert/1, csv:stream(Stream))).
+
+assert([<<"urn:", _/binary>>, _, _]) ->
+   true;
+assert(_) ->
+   false.
+
+fold({s, [Urn | _], _}=Stream) ->
+   reduce(Urn, [],
+      stream:splitwith(
+         fun([X | _]) -> X =:= Urn end,
+         Stream
+      )
+   );
+fold({}) ->
+   stream:new().
+
+reduce(Urn, Acc, {s, _, _} = Stream) ->
+   case stream:head(Stream) of
+      eos    ->
+         stream:new({Urn, lists:reverse(Acc)}, fun() -> fold(stream:tail(Stream)) end);
+      [_, T, X] ->
+         reduce(Urn, [{tempus:decode(T), scalar:i(X)} | Acc], stream:tail(Stream))
+   end;
+
+reduce(Urn, Acc, {}) ->
+   stream:new({Urn, lists:reverse(Acc)}).
 
