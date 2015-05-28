@@ -36,12 +36,11 @@
   ,scan/3
   ,csv/1
 ]).
--export_type([ticker/0, series/0, range/0]).
+-export_type([series/0, range/0]).
 
 %%
 %% type definition
 -type(fd()     :: any()).
--type(ticker() :: binary()).
 -type(val()    :: integer() | uid:g()).
 -type(tag()    :: binary()).
 -type(series() :: [{tempus:t(), val()} | val()]).
@@ -76,17 +75,17 @@ free(#chronolog{pid = Pid}) ->
 
 %%
 %% lookup human readable urn by 64-bit uid
--spec(ticker/2 :: (fd(), uid:l()) -> ticker()).
+-spec(ticker/2 :: (fd(), uid:l()) -> uri:urn()).
 
 ticker(FD, Uid) ->
    chronolog_file:lookup(FD, Uid).
 
 %%
 %% append value
--spec(append/3  :: (fd(), ticker(), series()) -> {ok, uid:l()}).
+-spec(append/3  :: (fd(), uri:uri(), series()) -> {ok, uid:l()}).
 
-append(FD, Ticker, Series) ->
-   {ok, Uid} = chronolog_file:ticker(FD, Ticker),
+append(FD, {urn, _, _}=Urn, Series) ->
+   {ok, Uid} = chronolog_file:ticker(FD, Urn),
    lists:foreach(
       fun(X) -> 
          chronolog_file:append(FD, Uid, chronolog_file:encode(FD, X)) 
@@ -97,30 +96,30 @@ append(FD, Ticker, Series) ->
 
 %%
 %% read stream values
--spec(stream/3 :: (fd(), ticker(), range()) -> datum:stream()).
+-spec(stream/3 :: (fd(), uri:urn(), range()) -> datum:stream()).
 
-stream(FD, Ticker, {_, _}=Range) ->
-   {ok, Uid} = chronolog_file:ticker(FD, Ticker),
+stream(FD, {urn, _, _}=Urn, {_, _}=Range) ->
+   {ok, Uid} = chronolog_file:ticker(FD, Urn),
    chronolog_file:stream(FD, Uid, Range);
 
-stream(FD, Ticker, Sec) ->
+stream(FD, Urn, Sec) ->
    T = os:timestamp(),
-   stream(FD, Ticker, {tempus:sub(T, Sec), T}).
+   stream(FD, Urn, {tempus:sub(T, Sec), T}).
 
 %%
 %% create ticker tags
--spec(mktag/3   :: (fd(), ticker(), tag()) -> ok).
+-spec(mktag/3   :: (fd(), uri:urn(), tag()) -> ok).
 
-mktag(FD, Ticker, Tag) ->
-   {ok, Uid} = chronolog_file:ticker(FD, Ticker),
+mktag(FD, {urn, _, _}=Urn, Tag) ->
+   {ok, Uid} = chronolog_file:ticker(FD, Urn),
    chronolog_file:mktag(FD, Uid, Tag).
 
 %%
 %% remove ticker tags
--spec(untag/3   :: (fd(), ticker(), tag()) -> ok).
+-spec(untag/3   :: (fd(), uri:urn(), tag()) -> ok).
 
-untag(FD, Ticker, Tag) ->
-   {ok, Uid} = chronolog_file:ticker(FD, Ticker),
+untag(FD, {urn, _, _}=Urn, Tag) ->
+   {ok, Uid} = chronolog_file:ticker(FD, Urn),
    chronolog_file:untag(FD, Uid, Tag).
 
 %%
@@ -136,7 +135,7 @@ match(FD, Tag) ->
 %% takes one or more input streams (tickers) and returns a newly-allocated
 %% stream in which elements united by time property.
 -spec(union/1 :: ([datum:stream()]) -> datum:stream()).
--spec(union/3 :: (fd(), [ticker()] | tag(), range()) -> datum:stream()).
+-spec(union/3 :: (fd(), [uri:urn()] | tag(), range()) -> datum:stream()).
 
 union(FD, Tag, Range)
  when is_binary(Tag) ->
@@ -171,7 +170,7 @@ do_union([Head | Tail]) ->
 %% elements of the ticker streams. The output stream is as long as 
 %% the longest input stream.
 -spec(join/1 :: ([datum:stream()]) -> datum:stream()).
--spec(join/3 :: (fd(), [ticker()] | tag(), range()) -> datum:stream()).
+-spec(join/3 :: (fd(), [uri:urn()] | tag(), range()) -> datum:stream()).
 
 join(FD, Tag, Range)
  when is_binary(Tag) ->
@@ -211,7 +210,7 @@ do_join(Streams) ->
 %% of the the corresponding elements of the ticker streams. The output 
 %% stream is as long as the shortest input stream.
 -spec(intersect/1 :: ([datum:stream()]) -> datum:stream()).
--spec(intersect/3 :: (fd(), [ticker()] | tag(), range()) -> datum:stream()).
+-spec(intersect/3 :: (fd(), [uri:urn()] | tag(), range()) -> datum:stream()).
 
 intersect(FD, Tag, Range)
  when is_binary(Tag) ->
@@ -292,7 +291,7 @@ assert(_) ->
    false.
 
 fold({s, [Urn | _], _}=Stream) ->
-   reduce(Urn, [],
+   reduce(uri:new(Urn), [],
       stream:splitwith(
          fun([X | _]) -> X =:= Urn end,
          Stream

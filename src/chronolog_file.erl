@@ -35,21 +35,22 @@
 %% lookup ticker associated with internal 64-bit identifier
 lookup(#chronolog{fd=FD}, {uid, Uid}) ->
    {ok, Urn} = dive:get(FD, <<$i, Uid/binary>>),
-   Urn.
+   uri:new(Urn).
 
 %%
 %% build ticker association with internal 64-bit identifier
-ticker(#chronolog{fd=FD}, <<"urn:", _/binary>>=Urn) ->
-   case dive:get(FD, <<$u, Urn/binary>>) of
+ticker(#chronolog{fd=FD}, {urn, Schema, Path}=Urn) ->
+   Key = <<$u, Schema/binary, $:, Path/binary>>,
+   case dive:get(FD, Key) of
       {error, not_found} ->
          {uid, Uid} = uid:l(),
          %% definition of urn have to be serialized due concurrency 
          dive:apply(FD, 
             fun() -> 
-               case dive:get(FD, <<$u, Urn/binary>>) of
+               case dive:get(FD, Key) of
                   {error, not_found} ->
-                     ok  = dive:put_(FD, <<$u, Urn/binary>>, Uid),
-                     ok  = dive:put_(FD, <<$i, Uid/binary>>, Urn),
+                     ok  = dive:put_(FD, Key, Uid),
+                     ok  = dive:put_(FD, <<$i, Uid/binary>>, uri:s(Urn)),
                      {ok, {uid, Uid}};                     
                   {ok, Val} ->
                      {ok, {uid, Val}}
@@ -133,13 +134,13 @@ untag(#chronolog{fd=FD}, {uid, Uid}, Tag) ->
 
 %%
 %%
-match(#chronolog{fd=FD}, Tag) ->
+match(#chronolog{fd=FD}, Prefix) ->
    stream:map(
       fun({Key, _}) -> 
-         [_,   Uid] = binary:split(Key, <<$0>>),
-         {uid, Uid}
+         [<<$t, Tag/binary>>, Uid] = binary:split(Key, <<$0>>),
+         {Tag, {uid, Uid}}
       end,
-      dive:match(FD, {'~', <<$t, Tag/binary>>})
+      dive:match(FD, {'~', <<$t, Prefix/binary>>})
    ).
 
 
