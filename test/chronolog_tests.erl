@@ -68,16 +68,16 @@ free(FD) ->
 
 append(FD) ->
    Seq = lists:seq(0,?N),
-   [?_assertMatch({ok, {uid, _}}, chronolog:append(FD, ?URN, [{os:timestamp(), X}])) || X <- Seq].
+   [?_assertMatch({ok, {uid, _}}, chronolog:append(FD, uri:new(?URN), [{os:timestamp(), X}])) || X <- Seq].
 
 stream(FD) ->
    Seq = lists:seq(0,?N),
    [
-      ?_assertMatch(Seq, unit(chronolog:stream(FD, ?URN, 60)))
+      ?_assertMatch(Seq, unit(chronolog:stream(FD, uri:new(?URN), 60)))
    ].
 
 mktag(FD) ->
-   [?_assertMatch(ok, chronolog:mktag(FD, ?URN, ?TAG))].
+   [?_assertMatch(ok, chronolog:mktag(FD, uri:new(?URN), ?TAG))].
 
 match(FD) ->
    Seq = lists:seq(0,?N),
@@ -88,7 +88,7 @@ match(FD) ->
    ].
 
 untag(FD) ->
-   [?_assertMatch(ok, chronolog:untag(FD, ?URN, ?TAG))].
+   [?_assertMatch(ok, chronolog:untag(FD, uri:new(?URN), ?TAG))].
 
 
 
