@@ -95,7 +95,6 @@ untag(FD) ->
    [?_assertMatch(ok, chronolog:untag(FD, Urn, ?TAG))].
 
 
-
 %%%------------------------------------------------------------------
 %%%
 %%% private
