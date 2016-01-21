@@ -28,11 +28,11 @@ chronolog_usec_test_() ->
       fun usec/0
      ,fun free/1
      ,[
-         fun append/1,
-         fun stream/1,
-         fun mktag/1,
-         fun match/1,
-         fun untag/1 
+         fun append/1
+        ,fun stream/1
+        ,fun mktag/1
+        ,fun match/1
+        ,fun untag/1 
       ]
    }.   
 
@@ -68,16 +68,19 @@ free(FD) ->
 
 append(FD) ->
    Seq = lists:seq(0,?N),
-   [?_assertMatch({ok, {uid, _}}, chronolog:append(FD, ?URN, [{os:timestamp(), X}])) || X <- Seq].
+   Urn = uri:new(?URN),
+   [?_assertMatch({ok, {uid, _}}, chronolog:append(FD, Urn, [{os:timestamp(), X}])) || X <- Seq].
 
 stream(FD) ->
    Seq = lists:seq(0,?N),
+   Urn = uri:new(?URN),
    [
-      ?_assertMatch(Seq, unit(chronolog:stream(FD, ?URN, 60)))
+      ?_assertMatch(Seq, unit(chronolog:stream(FD, Urn, 60)))
    ].
 
 mktag(FD) ->
-   [?_assertMatch(ok, chronolog:mktag(FD, ?URN, ?TAG))].
+   Urn = uri:new(?URN),
+   [?_assertMatch(ok, chronolog:mktag(FD, Urn, ?TAG))].
 
 match(FD) ->
    Seq = lists:seq(0,?N),
@@ -88,7 +91,8 @@ match(FD) ->
    ].
 
 untag(FD) ->
-   [?_assertMatch(ok, chronolog:untag(FD, ?URN, ?TAG))].
+   Urn = uri:new(?URN),
+   [?_assertMatch(ok, chronolog:untag(FD, Urn, ?TAG))].
 
 
 

@@ -268,13 +268,11 @@ scan(Fun, W, Stream)
 scan(Fun, {_, _, _}=W, Stream) ->
    {T, _}  = stream:head(Stream),
    Chronon = tempus:discrete(T, W),
-   {Head, Tail} = stream:prefix(
-      stream:splitwith(
-         fun({T1, _}) ->
-            tempus:discrete(T1, W) =:= Chronon
-         end,
-         Stream
-      )
+   {Head, Tail} = stream:splitwhile(
+      fun({T1, _}) ->
+         tempus:discrete(T1, W) =:= Chronon
+      end,
+      Stream
    ),
    stream:new({Chronon, Fun([X || {_, X} <- Head])}, fun() -> scan(Fun, W, Tail) end).
 
@@ -291,8 +289,8 @@ assert(_) ->
    false.
 
 fold({s, [Urn | _], _}=Stream) ->
-   reduce(uri:new(Urn), [],
-      stream:splitwith(
+   reduce(uri:new(Urn),
+      stream:splitwhile(
          fun([X | _]) -> X =:= Urn end,
          Stream
       )
@@ -300,14 +298,9 @@ fold({s, [Urn | _], _}=Stream) ->
 fold({}) ->
    stream:new().
 
-reduce(Urn, Acc, {s, _, _} = Stream) ->
-   case stream:head(Stream) of
-      eos    ->
-         stream:new({Urn, lists:reverse(Acc)}, fun() -> fold(stream:tail(Stream)) end);
-      [_, T, X] ->
-         reduce(Urn, [{tempus:decode(T), scalar:i(X)} | Acc], stream:tail(Stream))
-   end;
+reduce(Urn, {Acc, {s, _, _} = Stream}) ->
+   stream:new({Urn, lists:reverse(Acc)}, fun() -> fold(stream:tail(Stream)) end);
 
-reduce(Urn, Acc, {}) ->
+reduce(Urn, {Acc, {}}) ->
    stream:new({Urn, lists:reverse(Acc)}).
 
