@@ -43,7 +43,7 @@ ticker(#chronolog{fd=FD}, {urn, Schema, Path}=Urn) ->
    Key = <<$u, Schema/binary, $:, Path/binary>>,
    case dive:get(FD, Key) of
       {error, not_found} ->
-         {uid, Uid} = uid:l(),
+         Uid = uid:encode(uid:l()),
          %% definition of urn have to be serialized due concurrency 
          dive:apply(FD, 
             fun() -> 
@@ -62,7 +62,7 @@ ticker(#chronolog{fd=FD}, {urn, Schema, Path}=Urn) ->
    end;
 
 ticker(_, '_') ->
-   {ok, uid:l()};
+   {ok, {uid, uid:encode(uid:l())}};
 
 ticker(_, {uid, _}=Uid) ->
    {ok, Uid}.

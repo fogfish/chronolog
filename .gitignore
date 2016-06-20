@@ -5,12 +5,8 @@
 *.dump
 *.tag.gz
 *.tgz
-src/*_leex.erl
-src/*_yeec.erl
-ebin/
-deps/
-.eunit/
 tests/
-rebar
-.rebar/
+rebar.lock
+rebar3
+_build/
 *.sublime-*
