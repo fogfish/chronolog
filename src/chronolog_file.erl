@@ -71,7 +71,7 @@ ticker(_, {uid, _}=Uid) ->
 %%
 %% append value to time-series
 append(#chronolog{fd=FD}, {uid, Uid}, {T, X}) ->
-   dive:put_(FD, <<$x, Uid/binary, T/binary>>, X).
+   dive:put_(dive:ioctl(nocache, FD), <<$x, Uid/binary, T/binary>>, X).
 
 %%
 %%
