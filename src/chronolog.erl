@@ -56,7 +56,7 @@ start() ->
 %%   Options:
 %%     {file, list()} - filename for time-series
 %%     {chronon, tempus:t() | integer()} - time series chronon
--spec(new/1 :: (list()) -> {ok, fd()} | {error, any()}).
+-spec new(list()) -> {ok, fd()} | {error, any()}.
 
 new(Opts) ->
    case supervisor:start_child(chronolog_cask_sup, [[{owner, self()}|Opts]]) of
@@ -68,21 +68,21 @@ new(Opts) ->
 
 %%
 %% release resources used by time-series
--spec(free/1 :: (any()) -> ok).
+-spec free(any()) -> ok.
 
 free(#chronolog{pid = Pid}) ->
    gen_server:call(Pid, free).
 
 %%
 %% lookup human readable urn by 64-bit uid
--spec(ticker/2 :: (fd(), uid:l()) -> uri:urn()).
+-spec ticker(fd(), uid:l()) -> uri:urn().
 
 ticker(FD, Uid) ->
    chronolog_file:lookup(FD, Uid).
 
 %%
 %% append value
--spec(append/3  :: (fd(), uri:uri(), series()) -> {ok, uid:l()}).
+-spec append(fd(), uri:uri(), series()) -> {ok, uid:l()}.
 
 append(FD, {urn, _, _}=Urn, Series) ->
    {ok, Uid} = chronolog_file:ticker(FD, Urn),
@@ -96,7 +96,7 @@ append(FD, {urn, _, _}=Urn, Series) ->
 
 %%
 %% read stream values
--spec(stream/3 :: (fd(), uri:urn(), range()) -> datum:stream()).
+-spec stream(fd(), uri:urn(), range()) -> datum:stream().
 
 stream(FD, {urn, _, _}=Urn, {_, _}=Range) ->
    {ok, Uid} = chronolog_file:ticker(FD, Urn),
@@ -108,7 +108,7 @@ stream(FD, Urn, Sec) ->
 
 %%
 %% create ticker tags
--spec(mktag/3   :: (fd(), uri:urn(), tag()) -> ok).
+-spec mktag(fd(), uri:urn(), tag()) -> ok.
 
 mktag(FD, {urn, _, _}=Urn, Tag) ->
    {ok, Uid} = chronolog_file:ticker(FD, Urn),
@@ -116,7 +116,7 @@ mktag(FD, {urn, _, _}=Urn, Tag) ->
 
 %%
 %% remove ticker tags
--spec(untag/3   :: (fd(), uri:urn(), tag()) -> ok).
+-spec untag(fd(), uri:urn(), tag()) -> ok.
 
 untag(FD, {urn, _, _}=Urn, Tag) ->
    {ok, Uid} = chronolog_file:ticker(FD, Urn),
@@ -125,7 +125,7 @@ untag(FD, {urn, _, _}=Urn, Tag) ->
 %%
 %% match all ticker to tag
 %% @todo: match all tags for ticker
--spec(match/2 :: (fd(), tag()) -> datum:stream()).
+-spec match(fd(), tag()) -> datum:stream().
 
 match(FD, Tag) ->
    chronolog_file:match(FD, Tag).
@@ -134,8 +134,8 @@ match(FD, Tag) ->
 %%
 %% takes one or more input streams (tickers) and returns a newly-allocated
 %% stream in which elements united by time property.
--spec(union/1 :: ([datum:stream()]) -> datum:stream()).
--spec(union/3 :: (fd(), [uri:urn()] | tag(), range()) -> datum:stream()).
+-spec union([datum:stream()]) -> datum:stream().
+-spec union(fd(), [uri:urn()] | tag(), range()) -> datum:stream().
 
 union(FD, Tag, Range)
  when is_binary(Tag) ->
@@ -169,8 +169,8 @@ do_union([Head | Tail]) ->
 %% stream in which each element is a joined by time property of the corresponding 
 %% elements of the ticker streams. The output stream is as long as 
 %% the longest input stream.
--spec(join/1 :: ([datum:stream()]) -> datum:stream()).
--spec(join/3 :: (fd(), [uri:urn()] | tag(), range()) -> datum:stream()).
+-spec join([datum:stream()]) -> datum:stream().
+-spec join(fd(), [uri:urn()] | tag(), range()) -> datum:stream().
 
 join(FD, Tag, Range)
  when is_binary(Tag) ->
@@ -209,8 +209,8 @@ do_join(Streams) ->
 %% in which each element is a intersection (inner join) by time property 
 %% of the the corresponding elements of the ticker streams. The output 
 %% stream is as long as the shortest input stream.
--spec(intersect/1 :: ([datum:stream()]) -> datum:stream()).
--spec(intersect/3 :: (fd(), [uri:urn()] | tag(), range()) -> datum:stream()).
+-spec intersect([datum:stream()]) -> datum:stream().
+-spec intersect(fd(), [uri:urn()] | tag(), range()) -> datum:stream().
 
 intersect(FD, Tag, Range)
  when is_binary(Tag) ->
@@ -258,7 +258,7 @@ do_intersect(Streams) ->
 %% accumulates the partial folds of an input stream into a newly-allocated
 %% output stream over time. The function aggregates values that belongs to
 %% chronon of size W.
--spec(scan/3 :: (function(), tempus:t(), datum:stream()) -> datum:stream()).
+-spec scan(function(), tempus:t(), datum:stream()) -> datum:stream().
 
 scan(_Fun, _Chronon, ?NULL) ->
    ?NULL;
@@ -278,7 +278,7 @@ scan(Fun, {_, _, _}=W, Stream) ->
 
 %%
 %% time series read from csv file and fold it using urn as key
--spec(csv/1 :: (datum:stream()) -> datum:stream()).
+-spec csv(datum:stream()) -> datum:stream().
 
 csv(Stream) ->
    fold(stream:filter(fun assert/1, csv:stream(Stream))).
