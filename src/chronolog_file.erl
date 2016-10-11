@@ -91,7 +91,7 @@ stream(#chronolog{fd=FD}=File, {uid, Uid}, {Ta, Tb}) ->
 encode(FD, {{_, _, _}=T, X}) ->
    {encode_key(FD, T), encode_val(FD, X)};
 encode(FD, X) ->
-   {encode_key(FD, os:timestamp()), encode_val(FD, X)}.
+   encode(FD, {os:timestamp(), X}).
 
 %% @todo: optimal encoding of chronon (var int - add support to scalar)
 encode_key(#chronolog{chronon={0,0,1}}, {A, B, C}) ->
@@ -104,8 +104,15 @@ encode_val(_, X)
 encode_val(_, X)
  when is_float(X) ->
    <<$f, X:64/float>>;
+encode_val(_, X)
+ when is_binary(X) ->
+   <<$b, X/binary>>;
+encode_val(_, {uid, _, _} = X) ->
+   <<$u, (uid:encode(X))/binary>>;
+encode_val(_, {uid, _, _, _} = X) ->
+   <<$u, (uid:encode(X))/binary>>;
 encode_val(_, {uid, X}) ->
-   <<$u, X/binary>>.
+   <<$t, X/binary>>.
 
 %%
 %%
@@ -119,7 +126,11 @@ decode_val(_, <<$i, X:32>>) ->
    X;
 decode_val(_, <<$f, X:64/float>>) ->
    X;
+decode_val(_, <<$b, X/binary>>) ->
+   X;
 decode_val(_, <<$u, X/binary>>) ->
+   uid:decode(X);
+decode_val(_, <<$t, X/binary>>) ->
    {uid, X}.
 
 %%

@@ -1,13 +1,12 @@
 {application, chronolog,
    [
       {description, "time series storage"},
-      {vsn,         "0.4.2"},
+      {vsn,         "0.4.3"},
       {modules,     []},
       {registered,  []},
       {applications,[
          kernel
         ,stdlib
-        ,lager
         ,cache
         ,dive
         ,uid

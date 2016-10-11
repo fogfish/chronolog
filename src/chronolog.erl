@@ -102,7 +102,7 @@ stream(FD, {urn, _, _}=Urn, {_, _}=Range) ->
    {ok, Uid} = chronolog_file:ticker(FD, Urn),
    chronolog_file:stream(FD, Uid, Range);
 
-stream(FD, Urn, Sec) ->
+stream(FD, {urn, _, _}=Urn, Sec) ->
    T = os:timestamp(),
    stream(FD, Urn, {tempus:sub(T, Sec), T}).
 
