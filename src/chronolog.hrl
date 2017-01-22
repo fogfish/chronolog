@@ -28,3 +28,9 @@
 -ifndef(NULL).
 -define(NULL, {}).
 -endif.
+
+%%
+%% inverse time starting point
+%%   16777215 = 1 bsl 24 - 1
+%%    1048575 = 1 bsl 20 - 1
+-define(T0, {16777215, 1048575, 1048575}).

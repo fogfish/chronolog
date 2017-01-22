@@ -2,6 +2,6 @@
    report, 
    verbose, 
    {i, "include"}, 
-   {outdir, "ebin"},
+   {outdir, "_build/default/lib/chronolog/ebin"},
    debug_info
 ]}.

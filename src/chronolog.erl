@@ -98,8 +98,8 @@ append(FD, {urn, _, _}=Urn, Series) ->
 
 %%
 %% lookup value
--spec lookup(fd(), uri:uri()) -> {ok, {tempus:t(), val()}}.
--spec lookup(fd(), uri:uri(), tempus:t()) -> {ok, {tempus:t(), val()}}.
+-spec lookup(fd(), uri:uri()) -> {tempus:t(), val()} | undefined.
+-spec lookup(fd(), uri:uri(), tempus:t()) -> {tempus:t(), val()} | undefined.
 
 lookup(FD, {urn, _, _}=Urn) ->
    {ok, Uid} = chronolog_file:ticker(FD, Urn),
@@ -107,7 +107,7 @@ lookup(FD, {urn, _, _}=Urn) ->
 
 lookup(FD, {urn, _, _}=Urn, T) ->
    {ok, Uid} = chronolog_file:ticker(FD, Urn),
-   chronolog_file:value(FD, Uid, chronolog_file:encode(FD, T)).
+   chronolog_file:value(FD, Uid, chronolog_file:encode_t(FD, T)).
 
 %%
 %% read stream values

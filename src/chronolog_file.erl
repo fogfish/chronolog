@@ -28,6 +28,8 @@
   ,stream/3
   ,encode/2
   ,decode/2
+  ,encode_t/2
+  ,decode_t/2
   ,mktag/3
   ,untag/3
   ,match/2
@@ -78,7 +80,7 @@ append(#chronolog{fd=FD}, {uid, Uid}, {T, X}) ->
 %%
 %% read latest value from time-series database
 value(#chronolog{fd=FD}=File, {uid, Uid}) ->
-   stream:head(
+   head_value(
       stream:map(
          fun(Val) -> decode(File, Val) end,
          dive:match(FD, {'~', <<$x, Uid/binary>>})
@@ -88,39 +90,51 @@ value(#chronolog{fd=FD}=File, {uid, Uid}) ->
 %%
 %% read latest value from time-series database around T
 value(#chronolog{fd=FD}=File, {uid, Uid}, T) ->
-   stream:head(
+   head_value(
       stream:map(
          fun(Val) -> decode(File, Val) end,
-         dive:match(FD, {'>=', <<$x, Uid/binary, T/binary>>})
+         dive:match(FD, {'=<', <<$x, Uid/binary, T/binary>>})
       )
    ).
 
+head_value(?NULL) ->
+   undefined;
+head_value(Stream) ->
+   stream:head(Stream).
 
 %%
 %%
 stream(#chronolog{fd=FD}=File, {uid, Uid}, {Ta, Tb}) ->
-   A = <<$x, Uid/binary, (encode_key(File, Ta))/binary>>,
-   B = <<$x, Uid/binary, (encode_key(File, Tb))/binary>>,
-   stream:map(
-      fun(Val) -> decode(File, Val) end,
-      stream:takewhile(
-         fun({Key, _}) -> Key =< B end,
-         dive:match(FD, {'>=', A})
-      )
-   ).
-   
+   A = <<$x, Uid/binary, (encode_t(File, Ta))/binary>>,
+   B = <<$x, Uid/binary, (encode_t(File, Tb))/binary>>,
+   case A > B of
+      %% from T0 -> Tn
+      true ->
+         stream:map(
+            fun(Val) -> decode(File, Val) end,
+            stream:takewhile(
+               fun({Key, _}) -> Key >= B end,
+               dive:match(FD, {'=<', A})
+            )
+         );
+      %% from Tn -> T0
+      _ ->
+         stream:map(
+            fun(Val) -> decode(File, Val) end,
+            stream:takewhile(
+               fun({Key, _}) -> Key =< B end,
+               dive:match(FD, {'>=', A})
+            )
+         )
+   end.
+
+
 %%
 %% encode series to internal storage format
-encode(FD, {_, _, _}=T) ->
-   encode_key(FD, T);
 encode(FD, {{_, _, _}=T, X}) ->
-   {encode_key(FD, T), encode_val(FD, X)};
+   {encode_t(FD, T), encode_val(FD, X)};
 encode(FD, X) ->
    encode(FD, {os:timestamp(), X}).
-
-%% @todo: optimal encoding of chronon (var int - add support to scalar)
-encode_key(#chronolog{chronon={0,0,1}}, {A, B, C}) ->
-   <<A:24, B:20, C:20>>.
 
 encode_val(_, X)
  when is_integer(X) ->
@@ -142,10 +156,8 @@ encode_val(_, {uid, X}) ->
 %%
 %%
 decode(FD, {Key, Val}) ->
-   {decode_key(FD, Key), decode_val(FD, Val)}.
+   {decode_t(FD, Key), decode_val(FD, Val)}.
 
-decode_key(#chronolog{chronon={0,0,1}}, <<$x, _:64, A:24, B:20, C:20>>) ->
-   {A, B, C}.
 
 decode_val(_, <<$i, X:32>>) ->
    X;
@@ -157,6 +169,18 @@ decode_val(_, <<$u, X/binary>>) ->
    uid:decode(X);
 decode_val(_, <<$t, X/binary>>) ->
    {uid, X}.
+
+%%
+%% encode time to I/O format
+encode_t(#chronolog{chronon={0,0,1}}, T) ->
+   {A, B, C} = tempus:sub(?T0, T),
+   <<A:24, B:20, C:20>>.
+
+%%
+%% decode time from I/O format
+decode_t(#chronolog{chronon={0,0,1}}, <<$x, _:64, A:24, B:20, C:20>>) ->
+   tempus:sub(?T0, {A, B, C}).
+
 
 %%
 %%
