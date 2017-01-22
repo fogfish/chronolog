@@ -23,6 +23,8 @@
    lookup/2
   ,ticker/2
   ,append/3
+  ,value/2
+  ,value/3
   ,stream/3
   ,encode/2
   ,decode/2
@@ -74,6 +76,27 @@ append(#chronolog{fd=FD}, {uid, Uid}, {T, X}) ->
    dive:put_(dive:ioctl(nocache, FD), <<$x, Uid/binary, T/binary>>, X).
 
 %%
+%% read latest value from time-series database
+value(#chronolog{fd=FD}=File, {uid, Uid}) ->
+   stream:head(
+      stream:map(
+         fun(Val) -> decode(File, Val) end,
+         dive:match(FD, {'~', <<$x, Uid/binary>>})
+      )
+   ).
+
+%%
+%% read latest value from time-series database around T
+value(#chronolog{fd=FD}=File, {uid, Uid}, T) ->
+   stream:head(
+      stream:map(
+         fun(Val) -> decode(File, Val) end,
+         dive:match(FD, {'>=', <<$x, Uid/binary, T/binary>>})
+      )
+   ).
+
+
+%%
 %%
 stream(#chronolog{fd=FD}=File, {uid, Uid}, {Ta, Tb}) ->
    A = <<$x, Uid/binary, (encode_key(File, Ta))/binary>>,
@@ -88,6 +111,8 @@ stream(#chronolog{fd=FD}=File, {uid, Uid}, {Ta, Tb}) ->
    
 %%
 %% encode series to internal storage format
+encode(FD, {_, _, _}=T) ->
+   encode_key(FD, T);
 encode(FD, {{_, _, _}=T, X}) ->
    {encode_key(FD, T), encode_val(FD, X)};
 encode(FD, X) ->

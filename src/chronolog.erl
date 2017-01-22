@@ -23,6 +23,8 @@
   ,free/1
   ,ticker/2
   ,append/3
+  ,lookup/2
+  ,lookup/3
   ,stream/3
   ,mktag/3
   ,untag/3
@@ -95,6 +97,19 @@ append(FD, {urn, _, _}=Urn, Series) ->
    {ok, Uid}.
 
 %%
+%% lookup value
+-spec lookup(fd(), uri:uri()) -> {ok, {tempus:t(), val()}}.
+-spec lookup(fd(), uri:uri(), tempus:t()) -> {ok, {tempus:t(), val()}}.
+
+lookup(FD, {urn, _, _}=Urn) ->
+   {ok, Uid} = chronolog_file:ticker(FD, Urn),
+   chronolog_file:value(FD, Uid).
+
+lookup(FD, {urn, _, _}=Urn, T) ->
+   {ok, Uid} = chronolog_file:ticker(FD, Urn),
+   chronolog_file:value(FD, Uid, chronolog_file:encode(FD, T)).
+
+%%
 %% read stream values
 -spec stream(fd(), uri:urn(), range()) -> datum:stream().
 
@@ -103,6 +118,7 @@ stream(FD, {urn, _, _}=Urn, {_, _}=Range) ->
    chronolog_file:stream(FD, Uid, Range);
 
 stream(FD, {urn, _, _}=Urn, Sec) ->
+   %% @todo: unlimited 
    T = os:timestamp(),
    stream(FD, Urn, {tempus:sub(T, Sec), T}).
 
