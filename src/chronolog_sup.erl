@@ -40,9 +40,21 @@ start_link() ->
 init(_) -> 
    {ok,
       {
-         {one_for_one, 5, 10},  
+         {one_for_one, 5, 1800},  
          [
-            ?CHILD(supervisor, chronolog_cask_sup)
+            ?CHILD(supervisor, pts, chronolog())
+         ,  ?CHILD(supervisor, chronolog_ticker_sup)
          ]
       }
    }.
+
+chronolog() ->
+   [
+      chronolog,
+      [
+         'read-through'
+      ,  {keylen,    2}
+      ,  {entity,    chronolog_chunk}
+      ,  {factory,   temporary}
+      ]
+   ].

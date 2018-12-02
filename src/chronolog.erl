@@ -15,33 +15,39 @@
 %%   limitations under the License.
 %%
 -module(chronolog).
+
+-compile({parse_transform, category}).
 -include("chronolog.hrl").
+-include_lib("datum/include/datum.hrl").
 
 -export([start/0]).
 -export([
    new/1
-  ,free/1
-  ,ticker/2
-  ,append/3
-  ,lookup/2
-  ,lookup/3
-  ,stream/3
-  ,mktag/3
-  ,untag/3
-  ,match/2
-  ,union/1
-  ,union/3
-  ,join/1
-  ,join/3
-  ,intersect/1
-  ,intersect/3
-  ,scan/3
-  ,csv/1
+,  new/2
+,  free/1
+,  append/2
+,  stream/2
+,  stream/3
+,  union/1
+,  union/2
+,  union/3
+,  join/1
+,  join/2
+,  join/3
+,  intersect/1
+,  intersect/2
+,  intersect/3
+,  scan/3
 ]).
 -export_type([series/0, range/0]).
 
 %%
 %% type definition
+-type opts()   :: #{
+                     chronon => tempus:t()
+                  ,  chunk   => integer()
+                  }.
+
 -type(fd()     :: any()).
 -type(val()    :: integer() | uid:g()).
 -type(tag()    :: binary()).
@@ -51,122 +57,134 @@
 %%
 %%
 start() ->
-   applib:boot(?MODULE, []).
+   application:ensure_all_started(?MODULE).
 
 %%
-%% create new time-series cask (open existed)
-%%   Options:
-%%     {file, list()} - filename for time-series
-%%     {chronon, tempus:t() | integer()} - time series chronon
--spec new(list()) -> {ok, fd()} | {error, any()}.
+%% create new time-series ticker 
+-spec new(_) -> datum:either( #chronolog{} ).
+-spec new(_, _) -> datum:either( #chronolog{} ).
 
-new(Opts) ->
-   case supervisor:start_child(chronolog_cask_sup, [[{owner, self()}|Opts]]) of
-      {ok, Pid} ->
-         gen_server:call(Pid, i);
-      Error     ->
-         Error
-   end.
+new(Ticker) ->
+   new(Ticker, #{}).
+
+new(Ticker, Opts) ->
+   [either ||
+      Chronolog =< #chronolog{
+         ticker   = Ticker
+      ,  chronon  = lens:get(lens:at(chronon, {0, 0, 100000}), Opts)
+      ,  chunk    = lens:get(lens:at(chunk, 3600), Opts)
+      },
+      supervisor:start_child(chronolog_ticker_sup, [Chronolog]),
+      cats:unit(Chronolog)
+   ].
 
 %%
 %% release resources used by time-series
--spec free(any()) -> ok.
+-spec free(_) -> ok.
 
-free(#chronolog{pid = Pid}) ->
-   gen_server:call(Pid, free).
-
-%%
-%% lookup human readable urn by 64-bit uid
--spec ticker(fd(), uid:l()) -> uri:urn().
-
-ticker(FD, Uid) ->
-   chronolog_file:lookup(FD, Uid).
+free(Ticker) ->
+   pipe:free(pns:whereis(chronolog, Ticker)).
 
 %%
 %% append value
--spec append(fd(), uri:uri(), series()) -> {ok, uid:l()}.
+-spec append(_, _) -> ok.
 
-append(FD, {urn, _, _}=Urn, Series) ->
-   {ok, Uid} = chronolog_file:ticker(FD, Urn),
+append(#chronolog{ticker = Ticker} = Chronolog, Stream) ->
    lists:foreach(
-      fun(X) -> 
-         chronolog_file:append(FD, Uid, chronolog_file:encode(FD, X)) 
-      end, 
-      Series
+      fun({Chunk, SubStream}) -> 
+         ok = pts:put(chronolog, {Ticker, Chunk}, SubStream)
+      end,
+      split(
+         Chronolog,
+         chronolog_codec:encode(Chronolog, Stream)
+      )
+   );
+
+append(Ticker, Stream) ->
+   append(pipe:ioctl(pns:whereis(chronolog, Ticker), chronolog), Stream).
+
+
+split(#chronolog{chunk = Length} = Chronolog, [{T0, _} | _] = Stream) ->
+   Chunk = chronolog_codec:seconds(T0) div Length,
+   {Head, Tail} = lists:splitwith(
+      fun({T1, _}) ->
+         chronolog_codec:seconds(T1) div Length == Chunk
+      end,
+      Stream
    ),
-   {ok, Uid}.
+   [{Chunk, Head} | split(Chronolog, Tail)];
+
+split(_, []) ->
+   [].
 
 %%
-%% lookup value
--spec lookup(fd(), uri:uri()) -> {tempus:t(), val()} | undefined.
--spec lookup(fd(), uri:uri(), tempus:t()) -> {tempus:t(), val()} | undefined.
-
-lookup(FD, {urn, _, _}=Urn) ->
-   {ok, Uid} = chronolog_file:ticker(FD, Urn),
-   chronolog_file:value(FD, Uid).
-
-lookup(FD, {urn, _, _}=Urn, T) ->
-   {ok, Uid} = chronolog_file:ticker(FD, Urn),
-   chronolog_file:value(FD, Uid, chronolog_file:encode_t(FD, T)).
-
 %%
-%% read stream values
--spec stream(fd(), uri:urn(), range()) -> datum:stream().
+-spec stream(_, _) -> datum:stream(). 
+-spec stream(_, _, _) -> datum:stream(). 
 
-stream(FD, {urn, _, _}=Urn, {_, _}=Range) ->
-   {ok, Uid} = chronolog_file:ticker(FD, Urn),
-   chronolog_file:stream(FD, Uid, Range);
+stream(Ticker, Sec) ->
+   stream(
+      Ticker,
+      chronolog_codec:t(chronolog_codec:seconds(os:timestamp()) - Sec),
+      os:timestamp()
+   ).
 
-stream(FD, {urn, _, _}=Urn, Sec) ->
-   %% @todo: unlimited 
-   T = os:timestamp(),
-   stream(FD, Urn, {tempus:sub(T, Sec), T}).
+stream(#chronolog{chunk = Length} = Chronolog, A, B) ->
+   Sa = chronolog_codec:seconds(A) div Length,
+   Sb = chronolog_codec:seconds(B) div Length,
+   Schedule = schedule(A, B, lists:seq(Sa, Sb)),
+   stream:unfold(fun unfold/1, {undefined, Schedule, Chronolog});
 
+stream(Ticker, A, B) ->
+   stream(pipe:ioctl(pns:whereis(chronolog, Ticker), chronolog), A, B).
+
+schedule(A, B, [Head]) ->
+   [{Head, A, B}];
+
+schedule(A, B, [Head | Tail]) ->
+   [{Head, A, undefined} | schedule(B, Tail)].
+
+schedule(B, [Head]) ->
+   [{Head, undefined, B}];
+
+schedule(B, [Head | Tail]) ->
+   [{Head, undefined, undefined} | schedule(B, Tail)].
+
+
+unfold({undefined, [], _}) ->
+   undefined;
+unfold({undefined, [{Chunk, A, B} | Tail], #chronolog{ticker = Ticker} = Chronolog}) ->
+   case pts:get(chronolog, {Ticker, Chunk, A, B}, infinity) of
+      {ok, Heap} ->
+         unfold({Heap, Tail, Chronolog});
+      {error, _} ->
+         unfold({undefined, Tail, Chronolog})
+   end;
+
+unfold({[], Tail, Chronolog}) ->
+   unfold({undefined, Tail, Chronolog});
+
+unfold({Heap, Tail, Chronolog}) ->
+   {hd(Heap), {tl(Heap), Tail, Chronolog}}.
+   
 %%
-%% create ticker tags
--spec mktag(fd(), uri:urn(), tag()) -> ok.
-
-mktag(FD, {urn, _, _}=Urn, Tag) ->
-   {ok, Uid} = chronolog_file:ticker(FD, Urn),
-   chronolog_file:mktag(FD, Uid, Tag).
-
-%%
-%% remove ticker tags
--spec untag(fd(), uri:urn(), tag()) -> ok.
-
-untag(FD, {urn, _, _}=Urn, Tag) ->
-   {ok, Uid} = chronolog_file:ticker(FD, Urn),
-   chronolog_file:untag(FD, Uid, Tag).
-
-%%
-%% match all ticker to tag
-%% @todo: match all tags for ticker
--spec match(fd(), tag()) -> datum:stream().
-
-match(FD, Tag) ->
-   chronolog_file:match(FD, Tag).
-
-
-%%
-%% takes one or more input streams (tickers) and returns a newly-allocated
+%% takes one or more input streams/tickers and returns a newly-allocated
 %% stream in which elements united by time property.
+-spec union([_], _) -> datum:stream().
+-spec union([_], _, _) -> datum:stream().
 -spec union([datum:stream()]) -> datum:stream().
--spec union(fd(), [uri:urn()] | tag(), range()) -> datum:stream().
 
-union(FD, Tag, Range)
- when is_binary(Tag) ->
-   union([stream(FD, X, Range) || X <- stream:list(match(FD, Tag))]);
+union(Tickers, Sec) ->
+   union([stream(X, Sec) || X <- Tickers]).
 
-union(FD, Tickers, Range)
- when is_list(Tickers) ->
-   union([stream(FD, X, Range) || X <- Tickers]).
+union(Tickers, A, B) ->
+   union([stream(X, A, B) || X <- Tickers]).
 
 union(Streams) ->
-   %% sort non-empty streams, so that least time is the first element
    do_union(
       lists:sort(
          fun(A, B) -> stream:head(A) =< stream:head(B) end,
-         [X || X <- Streams, X =/= ?NULL]
+         [X || X <- Streams, X =/= ?stream()]
       )
    ).
 
@@ -175,9 +193,7 @@ do_union([]) ->
 do_union([Head | Tail]) ->
    stream:new(
       stream:head(Head),
-      fun() -> 
-         union([stream:tail(Head) | Tail]) 
-      end
+      fun() -> union([stream:tail(Head) | Tail]) end
    ).
 
 %%
@@ -185,23 +201,21 @@ do_union([Head | Tail]) ->
 %% stream in which each element is a joined by time property of the corresponding 
 %% elements of the ticker streams. The output stream is as long as 
 %% the longest input stream.
+-spec join([_], _) -> datum:stream().
+-spec join([_], _, _) -> datum:stream().
 -spec join([datum:stream()]) -> datum:stream().
--spec join(fd(), [uri:urn()] | tag(), range()) -> datum:stream().
 
-join(FD, Tag, Range)
- when is_binary(Tag) ->
-   join([stream(FD, X, Range) || X <- stream:list(match(FD, Tag))]);
+join(Tickers, Sec) ->
+   join([stream(X, Sec) || X <- Tickers]).
 
-join(FD, Tickers, Range)
- when is_list(Tickers) ->
-   join([stream(FD, X, Range) || X <- Tickers]).
+join(Tickers, A, B) ->
+   join([stream(X, A, B) || X <- Tickers]).
 
 join(Streams) ->
-   %% sort non-empty streams, so that least time is the first element
    do_join(
       lists:sort(
          fun(A, B) -> stream:head(A) =< stream:head(B) end,
-         [X || X <- Streams, X =/= ?NULL]
+         [X || X <- Streams, X =/= ?stream()]
       )
    ).
 
@@ -225,19 +239,17 @@ do_join(Streams) ->
 %% in which each element is a intersection (inner join) by time property 
 %% of the the corresponding elements of the ticker streams. The output 
 %% stream is as long as the shortest input stream.
+-spec intersect([_], _) -> datum:stream().
+-spec intersect([_], _, _) -> datum:stream().
 -spec intersect([datum:stream()]) -> datum:stream().
--spec intersect(fd(), [uri:urn()] | tag(), range()) -> datum:stream().
 
-intersect(FD, Tag, Range)
- when is_binary(Tag) ->
-   intersect([stream(FD, X, Range) || X <- stream:list(match(FD, Tag))]);
+intersect(Tickers, Sec) ->
+   intersect([stream(X, Sec) || X <- Tickers]).
 
-intersect(FD, Tickers, Range)
- when is_list(Tickers) ->
-   intersect([stream(FD, X, Range) || X <- Tickers]).
+intersect(Tickers, A, B) ->
+   intersect([stream(X, A, B) || X <- Tickers]).
 
 intersect(Streams) ->
-   %% sort non-empty streams, so that least time is the first element
    try
       do_intersect(
          lists:sort(
@@ -246,7 +258,6 @@ intersect(Streams) ->
          )
       )
    catch _:_ ->
-      %% stream fail if eof
       stream:new()
    end.
 
@@ -276,8 +287,8 @@ do_intersect(Streams) ->
 %% chronon of size W.
 -spec scan(function(), tempus:t(), datum:stream()) -> datum:stream().
 
-scan(_Fun, _Chronon, ?NULL) ->
-   ?NULL;
+scan(_Fun, _Chronon, ?stream()) ->
+   ?stream();
 scan(Fun, W, Stream)
  when is_integer(W) ->
    scan(Fun, tempus:t(s, W), Stream);
@@ -290,33 +301,4 @@ scan(Fun, {_, _, _}=W, Stream) ->
       end,
       Stream
    ),
-   stream:new({Chronon, Fun([X || {_, X} <- Head])}, fun() -> scan(Fun, W, Tail) end).
-
-%%
-%% time series read from csv file and fold it using urn as key
--spec csv(datum:stream()) -> datum:stream().
-
-csv(Stream) ->
-   fold(stream:filter(fun assert/1, csv:stream(Stream))).
-
-assert([<<"urn:", _/binary>>, _, _]) ->
-   true;
-assert(_) ->
-   false.
-
-fold({s, [Urn | _], _}=Stream) ->
-   reduce(uri:new(Urn),
-      stream:splitwhile(
-         fun([X | _]) -> X =:= Urn end,
-         Stream
-      )
-   );
-fold({}) ->
-   stream:new().
-
-reduce(Urn, {Acc, {s, _, _} = Stream}) ->
-   stream:new({Urn, lists:reverse(Acc)}, fun() -> fold(stream:tail(Stream)) end);
-
-reduce(Urn, {Acc, {}}) ->
-   stream:new({Urn, lists:reverse(Acc)}).
-
+   stream:new({Chronon, Fun([X || {_, X} <- stream:list(Head)])}, fun() -> scan(Fun, W, Tail) end).

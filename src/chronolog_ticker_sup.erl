@@ -1,6 +1,6 @@
-%% @description
-%%   resource description storage
--module(chronolog_cask_sup).
+%% @doc
+%%   
+-module(chronolog_ticker_sup).
 -behaviour(supervisor).
 
 -export([
@@ -28,7 +28,7 @@ init(_) ->
       {
          {simple_one_for_one, 100000, 1},  
          [
-            ?CHILD(worker, chronolog_cask)
+            ?CHILD(worker, chronolog_ticker)
          ]
       }
    }.

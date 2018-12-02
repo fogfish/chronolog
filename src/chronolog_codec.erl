@@ -14,17 +14,37 @@
 %%   See the License for the specific language governing permissions and
 %%   limitations under the License.
 %%
+-module(chronolog_codec).
+
+-include("chronolog.hrl").
+
+-export([
+   t/1,
+   seconds/1,
+   encode/2
+]).
 
 %%
-%%
--record(chronolog, {
-   ticker  = undefined :: _
-,  chunk   = undefined :: _
-,  chronon = undefined :: tempus:t() | integer()
-}).
+%% seconds to time stamp
+t(Sec) ->
+   {Sec div 1000000, Sec rem 1000000, 0}.
 
 %%
-%% inverse time starting point
-%%   16777215 = 1 bsl 24 - 1
-%%    1048575 = 1 bsl 20 - 1
--define(T0, {16777215, 1048575, 1048575}).
+%% time stamp to seconds
+seconds({A, B, _}) ->
+   A * 1000000 + B.
+
+%%
+%% encode list of value to time-series
+encode(Chronolog, List) ->
+   [encode_pair(Chronolog, Pair) || Pair <- List].
+
+encode_pair(#chronolog{chronon = Ch}, {{_, _, _} = T, X}) ->
+   {encode_t(Ch, T), X};
+encode_pair(#chronolog{chronon = Ch}, X) ->
+   {encode_t(Ch, os:timestamp()), X}.
+
+encode_t({0, 0, 1}, T) ->
+   T;
+encode_t({_, _, _} = Ch, T) ->
+   tempus:discrete(T, Ch).
