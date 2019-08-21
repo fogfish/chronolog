@@ -44,14 +44,32 @@
 %%
 %% type definition
 -type opts()   :: #{
+                     %% The library uses a discrete model of time. It aggregates
+                     %% and persists a time series measurement within a chronon.
+                     %% The chronon is smallest non decomposable time unit, N milliseconds
+                     %% actual length is configurable by application from 1 microsecond to 1 day, 
+                     %% default value is 100 ms {0, 0, 100000}
                      chronon => tempus:t()
+
+                     %% The library uses a chunk(s) to combine consequent time series measurements
+                     %% Chunks implements a paging approach to manipulate time series data
+                     %% default value is 3600 seconds    
                   ,  chunk   => integer()
                   }.
+
+%%
+%% A ticker is a short abbreviation used to uniquely identify time series sequence. 
+%% The ticker MAY consist of letters numbers or a combination of both, its length MUST NOT exceed 
+%% 30 bytes. The ticker MUST be defined and registered by client application.
+-type ticker() :: _.
+
+%%
+%%
+-type series() :: [{tempus:t(), val()} | val()].
 
 -type(fd()     :: any()).
 -type(val()    :: integer() | uid:g()).
 -type(tag()    :: binary()).
--type(series() :: [{tempus:t(), val()} | val()]).
 -type(range()  :: {tempus:t(), tempus:t()} | integer()).
 
 %%
@@ -61,8 +79,8 @@ start() ->
 
 %%
 %% create new time-series ticker 
--spec new(_) -> datum:either( #chronolog{} ).
--spec new(_, _) -> datum:either( #chronolog{} ).
+-spec new(ticker()) -> datum:either( #chronolog{} ).
+-spec new(ticker(), opts()) -> datum:either( #chronolog{} ).
 
 new(Ticker) ->
    new(Ticker, #{}).
@@ -80,14 +98,14 @@ new(Ticker, Opts) ->
 
 %%
 %% release resources used by time-series
--spec free(_) -> ok.
+-spec free(ticker()) -> ok.
 
 free(Ticker) ->
    pipe:free(pns:whereis(chronolog, Ticker)).
 
 %%
 %% append value
--spec append(_, _) -> ok.
+-spec append(ticker() | #chronolog{}, series()) -> ok.
 
 append(#chronolog{ticker = Ticker} = Chronolog, Stream) ->
    lists:foreach(
@@ -119,8 +137,8 @@ split(_, []) ->
 
 %%
 %%
--spec stream(_, _) -> datum:stream(). 
--spec stream(_, _, _) -> datum:stream(). 
+-spec stream(ticker() | #chronolog{}, tempus:s()) -> datum:stream(). 
+-spec stream(ticker() | #chronolog{}, tempus:t(), tempus:t()) -> datum:stream(). 
 
 stream(Ticker, Sec) ->
    stream(
@@ -170,8 +188,8 @@ unfold({Heap, Tail, Chronolog}) ->
 %%
 %% takes one or more input streams/tickers and returns a newly-allocated
 %% stream in which elements united by time property.
--spec union([_], _) -> datum:stream().
--spec union([_], _, _) -> datum:stream().
+-spec union([ticker()], tempus:s()) -> datum:stream().
+-spec union([ticker()], tempus:t(), tempus:t()) -> datum:stream().
 -spec union([datum:stream()]) -> datum:stream().
 
 union(Tickers, Sec) ->
@@ -201,8 +219,8 @@ do_union([Head | Tail]) ->
 %% stream in which each element is a joined by time property of the corresponding 
 %% elements of the ticker streams. The output stream is as long as 
 %% the longest input stream.
--spec join([_], _) -> datum:stream().
--spec join([_], _, _) -> datum:stream().
+-spec join([ticker()], tempus:s()) -> datum:stream().
+-spec join([ticker()], tempus:t(), tempus:t()) -> datum:stream().
 -spec join([datum:stream()]) -> datum:stream().
 
 join(Tickers, Sec) ->
@@ -239,8 +257,8 @@ do_join(Streams) ->
 %% in which each element is a intersection (inner join) by time property 
 %% of the the corresponding elements of the ticker streams. The output 
 %% stream is as long as the shortest input stream.
--spec intersect([_], _) -> datum:stream().
--spec intersect([_], _, _) -> datum:stream().
+-spec intersect([ticker()], tempus:s()) -> datum:stream().
+-spec intersect([ticker()], tempus:t(), tempus:t()) -> datum:stream().
 -spec intersect([datum:stream()]) -> datum:stream().
 
 intersect(Tickers, Sec) ->
